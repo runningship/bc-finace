@@ -12,7 +12,6 @@ import java.util.List;
 
 import org.apache.commons.io.IOUtils;
 import org.bc.sdak.CommonDaoService;
-import org.bc.sdak.Page;
 import org.bc.sdak.SimpDaoTool;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -25,14 +24,15 @@ public class StockTuiJian {
 	public static void main(String[] args) throws IOException {
 		 StartUpListener.initDataSource();
 		// //所有非创业板股票
-		Page<Stock> page = new Page<Stock>();
-		page.setPageSize(100);
-		page = dao.findPage(page, "from Stock where code not like '3%' ");
-//		List<Stock> list = dao.listByParams(Stock.class,"from Stock where code not like '3%' ");
+//		Page<Stock> page = new Page<Stock>();
+//		page.setPageSize(100);
+//		page = dao.findPage(page, "from Stock where code not like '3%' ");
+		List<Stock> list = dao.listByParams(Stock.class,"from Stock where code not like '3%' ");
 		//http://table.finance.yahoo.com/table.csv?s=000061.ss
 		//http://table.finance.yahoo.com/table.csv?s=000061.sz
 		 List<AverageFC> result = new ArrayList<AverageFC>();
-		for(Stock stock : page.getResult()){
+		 int count=0;
+		for(Stock stock : list){
 			try{
 				AverageFC afc = null;
 				if("sz".equals(stock.type)){
@@ -46,6 +46,8 @@ public class StockTuiJian {
 			}catch(Exception ex){
 				ex.printStackTrace();
 			}
+			count++;
+			System.out.println(count);
 		}
 		Collections.sort(result);
 		System.out.println();
@@ -58,16 +60,18 @@ public class StockTuiJian {
 	}
 
 	private static AverageFC cacuMoveAverage(String code , String name) throws IOException {
-//		URL url = new URL("http://table.finance.yahoo.com/table.csv?s="+code+".ss&d=3&e=31&f=2015&g=d&a=1&b=1&c=2015&ignore=.csv");
 		URL url = new URL("http://www.google.com.hk/finance/historical?q="+code);
-		//http://www.google.com.hk/finance/historical?q=000861
+//		URL url = new URL("http://www.google.com.hk/finance/historical?q=SHA:600555");
+		
 		URLConnection conn = url.openConnection();
-		conn.setConnectTimeout(10000);
-		conn.setReadTimeout(10000);
+		conn.setConnectTimeout(30000);
+		conn.setReadTimeout(30000);
 		String result = IOUtils.toString(conn.getInputStream() , "utf8");
 		Document doc = Jsoup.parse(result);
 		Elements rows = doc.select("#prices tr");
-		
+		if(rows.isEmpty()){
+			return null;
+		}
 		float average5 = 0;
 		float average10 = 0;
 		float average15 = 0;
@@ -83,15 +87,15 @@ public class StockTuiJian {
 			String day = rows.get(row).child(0).ownText();
 			//TODO过滤掉停牌的
 			try {
-				Date date = DataHelper.sdf.parse(day);
+				Date date = DataHelper.dateSdf.parse(day);
 				Calendar now = Calendar.getInstance();
 				//两天前
 				now.add(Calendar.DAY_OF_MONTH, -2);
 				Calendar cal = Calendar.getInstance();
 				cal.setTime(date);
-				if(cal.before(now)){
+				if(cal.before(now) && row==1){
 					System.out.println(code+","+name+"已停牌");
-					continue;
+					return null;
 				}
 			} catch (ParseException e) {
 				e.printStackTrace();
@@ -114,11 +118,11 @@ public class StockTuiJian {
 			}
 			if (row == 30) {
 				average30 = total / 30;
-				if(firstPrice>price){
-					//当前价格高于历史价格，处于上升期拐点,过滤
-					System.out.println(code+","+name+"处于上升期拐点");
-					return null;
-				}
+//				if(firstPrice>price){
+//					//当前价格高于历史价格，处于上升期拐点,过滤
+//					System.out.println(code+","+name+"处于上升期拐点");
+//					return null;
+//				}
 				break;
 			}
 		}
